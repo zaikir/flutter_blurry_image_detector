@@ -1,0 +1,1 @@
+# flutter_blurry_image_detector

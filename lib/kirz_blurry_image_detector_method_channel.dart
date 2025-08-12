@@ -14,10 +14,11 @@ class MethodChannelKirzBlurryImageDetector extends KirzBlurryImageDetectorPlatfo
     required List<String> assetIds,
     required double threshold,
   }) async {
-    final result = await methodChannel.invokeMethod<List<String>>('analyzeAssetsByIds', {
+    final result = await methodChannel.invokeListMethod<String>('analyzeAssetsByIds', {
       'assetIds': assetIds,
       'threshold': threshold,
     });
+
     return result ?? [];
   }
 }

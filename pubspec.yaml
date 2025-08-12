@@ -1,7 +1,7 @@
 name: kirz_blurry_image_detector
-description: "A new Flutter plugin project."
-version: 0.0.1
-homepage:
+description: "Blurry image detector plugin"
+version: 1.0.1
+homepage: https://github.com/zaikir/flutter_blurry_image_detector
 
 environment:
   sdk: ^3.7.2
@@ -39,8 +39,8 @@ flutter:
     # then add platforms following the instruction here:
     # https://flutter.dev/to/pubspec-plugin-platforms
     # -------------------
-      some_platform:
-        pluginClass: somePluginClass
+      ios:
+        pluginClass: KirzBlurryImageDetectorPlugin
     # -------------------
 
   # To add assets to your plugin package, add an assets section, like this:

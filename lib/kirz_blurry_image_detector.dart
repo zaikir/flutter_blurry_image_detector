@@ -11,12 +11,12 @@ class BlurryImageDetector {
   /// Analyzes multiple assets by their IDs and returns blurry image results
   static Future<List<String>> findBlurryImages({
     double? threshold,
-    required int pageSize,
+    int? pageSize,
     required Function(int page, List<String> blurryIds) onProgress,
   }) {
     return KirzBlurryImageDetectorPlatform.instance.findBlurryImages(
       threshold: threshold,
-      pageSize: pageSize,
+      pageSize: pageSize ?? 200,
       onProgress: onProgress,
     );
   }

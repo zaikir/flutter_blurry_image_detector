@@ -3,8 +3,6 @@ import Photos
 import UIKit
 
 public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
-  let detector = BlurryImageDetector()
-
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "kirz_blurry_image_detector",
                                        binaryMessenger: registrar.messenger())
@@ -45,6 +43,21 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
         
         // Wait for all buffer extraction to finish
         dispatchGroup.notify(queue: .global(qos: .userInitiated)) {
+          let detector = BlurDetectorGPU()!
+          let inflight = DispatchSemaphore(value: 4)
+          let threshold: Float = 0.00025
+
+          for (id, pb) in assetBuffers {
+              inflight.wait()
+              detector.encodeVarianceOfLaplacian(pb) { variance in
+                  if let v = variance, v < threshold {
+                      print(variance)
+                      blurryIds.append(id)
+                  }
+                  inflight.signal()
+              }
+          }
+
           DispatchQueue.main.async {
             result(blurryIds)
           }

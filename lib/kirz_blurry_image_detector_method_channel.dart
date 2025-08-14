@@ -10,15 +10,33 @@ class MethodChannelKirzBlurryImageDetector extends KirzBlurryImageDetectorPlatfo
   final methodChannel = const MethodChannel('kirz_blurry_image_detector');
 
   @override
-  Future<List<String>> analyzeAssetsByIds({
-    required List<String> assetIds,
-    required double threshold,
+  Future<List<String>> findBlurryImages({
+    double? threshold,
+    required int pageSize,
+    required Function(int page, List<String> blurryIds) onProgress,
   }) async {
-    final result = await methodChannel.invokeListMethod<String>('analyzeAssetsByIds', {
-      'assetIds': assetIds,
-      'threshold': threshold,
+    // Set up event channel for progress updates
+    const eventChannel = EventChannel('kirz_blurry_image_detector_progress');
+    final stream = eventChannel.receiveBroadcastStream();
+
+    List<String> blurryIds = [];
+    // Listen to progress updates
+    stream.listen((dynamic event) {
+      if (event is Map) {
+        final page = event['page'] as int?;
+        final ids = (event['ids'] as List<dynamic>?)?.cast<String>() ?? [];
+        if (page != null) {
+          blurryIds.addAll(ids);
+          onProgress(page, blurryIds);
+        }
+      }
     });
 
-    return result ?? [];
+    await methodChannel.invokeListMethod<String>('findBlurryImages', {
+      'threshold': threshold,
+      'pageSize': pageSize,
+    });
+
+    return blurryIds;
   }
 }

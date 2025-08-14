@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'kirz_blurry_image_detector'
-  s.version          = '1.0.1'
+  s.version          = '1.0.3'
   s.summary          = 'Blurry detector plugin'
   s.description      = 'Metal/MPS Laplacian variance'
   s.homepage         = 'https://github.com/zaikir'

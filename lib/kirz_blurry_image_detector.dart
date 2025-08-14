@@ -9,13 +9,15 @@ import 'kirz_blurry_image_detector_platform_interface.dart';
 
 class BlurryImageDetector {
   /// Analyzes multiple assets by their IDs and returns blurry image results
-  static Future<List<String>> analyzeAssetsByIds({
-    required List<String> assetIds,
-    required double threshold,
+  static Future<List<String>> findBlurryImages({
+    double? threshold,
+    required int pageSize,
+    required Function(int page, List<String> blurryIds) onProgress,
   }) {
-    return KirzBlurryImageDetectorPlatform.instance.analyzeAssetsByIds(
-      assetIds: assetIds,
+    return KirzBlurryImageDetectorPlatform.instance.findBlurryImages(
       threshold: threshold,
+      pageSize: pageSize,
+      onProgress: onProgress,
     );
   }
 }

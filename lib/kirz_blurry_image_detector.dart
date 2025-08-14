@@ -12,10 +12,10 @@ class BlurryImageDetector {
   static Future<List<String>> findBlurryImages({
     double? threshold,
     int? pageSize,
-    required Function(int page, List<String> blurryIds) onProgress,
+    required Function(int page, double progress, List<String> blurryIds) onProgress,
   }) {
     return KirzBlurryImageDetectorPlatform.instance.findBlurryImages(
-      threshold: threshold,
+      threshold: threshold ?? 0.010,
       pageSize: pageSize ?? 200,
       onProgress: onProgress,
     );

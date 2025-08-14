@@ -2,14 +2,21 @@ import Flutter
 import Photos
 import UIKit
 
-public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
+public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var registrar: FlutterPluginRegistrar?
+  private var eventChannel: FlutterEventChannel?
+  private var sink: FlutterEventSink?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "kirz_blurry_image_detector",
                                        binaryMessenger: registrar.messenger())
+    let eventsChannel = FlutterEventChannel(name: "kirz_blurry_image_detector_progress",
+                                            binaryMessenger: registrar.messenger())
+
     let instance = KirzBlurryImageDetectorPlugin()
     instance.registrar = registrar
+    instance.eventChannel = eventsChannel
+    eventsChannel.setStreamHandler(instance)
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
@@ -23,13 +30,7 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
         return
       }
 
-      let threshold = args["threshold"] as? Double ?? 0.010
-
-      // Set up event channel for progress updates
-      let eventChannel = FlutterEventChannel(name: "kirz_blurry_image_detector_progress",
-                                             binaryMessenger: registrar!.messenger())
-      let eventSink = EventSink()
-      eventChannel.setStreamHandler(eventSink)
+      let threshold = args["threshold"] as! Double
 
       DispatchQueue.global(qos: .userInitiated).async {
         // Fetch all assets from the photo library
@@ -40,14 +41,13 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
         fetch.enumerateObjects { a, _, _ in assets.append(a) }
 
         let totalPages = (assets.count + pageSize - 1) / pageSize
-        // var allBlurryIds: [String] = []
-        
+
         // Semaphore to limit concurrent page processing
         let pageSemaphore = DispatchSemaphore(value: 1) // Process max 2 pages at once
 
         for page in 0 ..< totalPages {
           pageSemaphore.wait() // Wait for available slot
-          
+
           let startIndex = page * pageSize
           let endIndex = min(startIndex + pageSize, assets.count)
           let pageAssets = Array(assets[startIndex ..< endIndex])
@@ -58,19 +58,34 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
             let progressData: [String: Any] = [
               "page": page + 1,
               "ids": pageBlurryIds,
+              "total": assets.count,
+              "processed": startIndex + pageAssets.count,
             ]
-            eventSink.send(progressData)
-            
+
+            self.sink?(progressData)
+
             // Signal that this page is done
             pageSemaphore.signal()
           }
         }
 
-        // result(allBlurryIds)
+        self.sink?(FlutterEndOfEventStream)
+        result(nil)
       }
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  public func onListen(withArguments _: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    sink = events
+    sink?(0)
+    return nil
+  }
+
+  public func onCancel(withArguments _: Any?) -> FlutterError? {
+    sink = nil
+    return nil
   }
 
   private func processPage(_ assets: [PHAsset], threshold: Float, completion: @escaping ([String]) -> Void) {
@@ -113,24 +128,5 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
         completion(blurryIds)
       }
     }
-  }
-}
-
-// Event sink for progress updates
-class EventSink: NSObject, FlutterStreamHandler {
-  private var eventSink: FlutterEventSink?
-
-  func onListen(withArguments _: Any?, eventSink events: FlutterEventSink?) -> FlutterError? {
-    eventSink = events
-    return nil
-  }
-
-  func onCancel(withArguments _: Any?) -> FlutterError? {
-    eventSink = nil
-    return nil
-  }
-
-  func send(_ data: [String: Any]) {
-    eventSink?(data)
   }
 }

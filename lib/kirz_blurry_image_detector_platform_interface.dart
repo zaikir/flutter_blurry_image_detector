@@ -25,9 +25,9 @@ abstract class KirzBlurryImageDetectorPlatform extends PlatformInterface {
 
   /// Analyzes multiple assets by their IDs with paging and progress updates
   Future<List<String>> findBlurryImages({
-    double? threshold,
+    required double threshold,
     required int pageSize,
-    required Function(int page, List<String> blurryIds) onProgress,
+    required Function(int page, double progress, List<String> blurryIds) onProgress,
   }) {
     throw UnimplementedError('findBlurryImages() has not been implemented.');
   }

@@ -27,38 +27,43 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
         fetch.enumerateObjects { a, _, _ in assets.append(a) }
 
         var blurryIds: [String] = []
+        let blurryIdsLock = NSLock()
         var assetBuffers: [String: CVPixelBuffer] = [:]
         let dispatchGroup = DispatchGroup()
-          
+
         let assetToPixelBuffer = AssetToPixelBuffer()
         for asset in assets {
           dispatchGroup.enter()
-          assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 512, height: 512)) { pixelBuffer in
+          assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
             if let pixelBuffer = pixelBuffer {
               assetBuffers[asset.localIdentifier] = pixelBuffer
             }
             dispatchGroup.leave()
           }
         }
-        
+
         // Wait for all buffer extraction to finish
         dispatchGroup.notify(queue: .global(qos: .userInitiated)) {
           let detector = BlurDetectorGPU()!
-          let inflight = DispatchSemaphore(value: 4)
-          let threshold: Float = 0.00025
+          let inflight = DispatchSemaphore(value: 2)
+          let threshold: Float = 0.010
+          let workGroup = DispatchGroup()
 
           for (id, pb) in assetBuffers {
-              inflight.wait()
-              detector.encodeVarianceOfLaplacian(pb) { variance in
-                  if let v = variance, v < threshold {
-                      print(variance)
-                      blurryIds.append(id)
-                  }
-                  inflight.signal()
+            inflight.wait()
+            workGroup.enter()
+            detector.encodeVarianceOfLaplacian(pb) { variance in
+              if let v = variance, v < threshold {
+                blurryIdsLock.lock()
+                blurryIds.append(id)
+                blurryIdsLock.unlock()
               }
+              inflight.signal()
+              workGroup.leave()
+            }
           }
 
-          DispatchQueue.main.async {
+          workGroup.notify(queue: .global(qos: .userInitiated)) {
             result(blurryIds)
           }
         }

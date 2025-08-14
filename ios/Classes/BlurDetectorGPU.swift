@@ -9,10 +9,12 @@ final class BlurDetectorGPU {
 
     // Reused MPS filters
     private let toGray: MPSImageConversion
+    private let gauss: MPSImageGaussianBlur
     private let lap: MPSImageLaplacian
     private let stats: MPSImageStatisticsMeanAndVariance
 
-    init?() {
+    /// sigma — стандартное отклонение гаусса в пикселях (обычно 0.8–1.6)
+    init?(gaussianSigma sigma: Float = 1.0) {
         guard let dev = MTLCreateSystemDefaultDevice(),
               MPSSupportsMTLDevice(dev),
               let q = dev.makeCommandQueue() else { return nil }
@@ -26,45 +28,51 @@ final class BlurDetectorGPU {
                                     srcAlpha: .alphaIsOne,
                                     destAlpha: .alphaIsOne,
                                     backgroundColor: nil,
-                                    conversionInfo: .init(src: srcCS,
-                                                          dst: dstCS))
-        lap = MPSImageLaplacian(device: dev)
+                                    conversionInfo: .init(src: srcCS, dst: dstCS))
+
+        gauss = MPSImageGaussianBlur(device: dev, sigma: sigma)
+        lap   = MPSImageLaplacian(device: dev)
         stats = MPSImageStatisticsMeanAndVariance(device: dev)
+
+        // Убираем артефакты по краям
+        gauss.edgeMode = .clamp
+        lap.edgeMode   = .clamp
     }
 
-    /// Encodes BGRA -> luma -> Laplacian -> variance. Non-blocking, calls `completion` when ready.
-    /// Reuse one shared `MTLCommandQueue` externally and throttle concurrency with a semaphore.
+    /// Encodes BGRA -> luma -> (Gaussian) -> Laplacian -> variance. Non-blocking.
     func encodeVarianceOfLaplacian(_ pixelBuffer: CVPixelBuffer,
                                    queue extQueue: MTLCommandQueue? = nil,
                                    completion: @escaping (Float?) -> Void)
     {
         let w = CVPixelBufferGetWidth(pixelBuffer)
         let h = CVPixelBufferGetHeight(pixelBuffer)
+        let n = w * h
 
-      
         var cvTex: CVMetalTexture?
-        let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, cache, pixelBuffer, nil,
-                                                        .bgra8Unorm, w, h, 0, &cvTex)
+        let result = CVMetalTextureCacheCreateTextureFromImage(
+            kCFAllocatorDefault, cache, pixelBuffer, nil, .bgra8Unorm, w, h, 0, &cvTex)
 
         guard result == kCVReturnSuccess,
               let unwrappedTex = cvTex,
               let src = CVMetalTextureGetTexture(unwrappedTex)
-        else {
-            completion(nil); return
-        }
+        else { completion(nil); return }
 
-        // Intermediates: luma + laplacian (single-channel)
-        let grayDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float, width: w, height: h, mipmapped: false)
-        grayDesc.usage = [.shaderRead, .shaderWrite]
-        grayDesc.storageMode = .private
-        guard let gray = device.makeTexture(descriptor: grayDesc),
-              let lapTex = device.makeTexture(descriptor: grayDesc)
-        else {
-            completion(nil); return
+        // Intermediates: gray, blurred, laplacian (single-channel r16f)
+        let chanDesc: () -> MTLTextureDescriptor = {
+            let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float,
+                                                             width: w, height: h, mipmapped: false)
+            d.usage = [.shaderRead, .shaderWrite]
+            d.storageMode = .private
+            return d
         }
+        guard let gray   = device.makeTexture(descriptor: chanDesc()),
+              let blurTx = device.makeTexture(descriptor: chanDesc()),
+              let lapTex = device.makeTexture(descriptor: chanDesc())
+        else { completion(nil); return }
 
         // Stats destination: 2x1 r32f (mean at (0,0), variance at (1,0))
-        let statsDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: 2, height: 1, mipmapped: false)
+        let statsDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float,
+                                                                 width: 2, height: 1, mipmapped: false)
         statsDesc.storageMode = .shared
         statsDesc.usage = [.shaderRead, .shaderWrite]
         guard let statsTex = device.makeTexture(descriptor: statsDesc) else {
@@ -76,8 +84,10 @@ final class BlurDetectorGPU {
 
         // BGRA -> luma
         toGray.encode(commandBuffer: cmd, sourceTexture: src, destinationTexture: gray)
+        // Gaussian blur (LoG)
+        gauss.encode(commandBuffer: cmd, sourceTexture: gray, destinationTexture: blurTx)
         // Laplacian
-        lap.encode(commandBuffer: cmd, sourceTexture: gray, destinationTexture: lapTex)
+        lap.encode(commandBuffer: cmd, sourceTexture: blurTx, destinationTexture: lapTex)
         // Mean & variance -> statsTex (2x1)
         stats.encode(commandBuffer: cmd, sourceTexture: lapTex, destinationTexture: statsTex)
 
@@ -85,8 +95,14 @@ final class BlurDetectorGPU {
             var out = [Float](repeating: 0, count: 2)
             let region = MTLRegionMake2D(0, 0, 2, 1)
             statsTex.getBytes(&out, bytesPerRow: 2 * MemoryLayout<Float>.size, from: region, mipmapLevel: 0)
-            let variance = out[1] // (0) = mean, (1) = variance
-            completion(variance)
+            let varPop  = out[1]  // σ² (population)
+
+            // Bessel correction -> sample std dev
+            let N  = max(2, n) // guard
+            let k  = Float(N) / Float(N - 1)
+            let stdSample = sqrt(max(0, varPop) * k)
+
+            completion(stdSample)
         }
         cmd.commit()
     }

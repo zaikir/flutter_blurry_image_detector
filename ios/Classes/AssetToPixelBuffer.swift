@@ -34,13 +34,11 @@ final class AssetToPixelBuffer {
 
     /// Convert CGImage to CVPixelBuffer (kCVPixelFormatType_32BGRA).
     private static func cgImageToPixelBuffer(_ cgImage: CGImage, size: CGSize) -> CVPixelBuffer? {
-        // ВАЖНО: добавили Metal + IOSurface, чтобы потом работал CVMetalTextureCache...
         let attrs: [CFString: Any] = [
             kCVPixelBufferMetalCompatibilityKey: true,
             kCVPixelBufferCGImageCompatibilityKey: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary, // обязательна для zero-copy
-            // (необязательно) kCVPixelBufferBytesPerRowAlignmentKey: 64
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
         ]
 
         var pxbuf: CVPixelBuffer?

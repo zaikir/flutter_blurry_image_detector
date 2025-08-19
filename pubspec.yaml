@@ -1,11 +1,11 @@
 name: kirz_blurry_image_detector
 description: "Blurry image detector plugin"
-version: 1.0.4
+version: 1.1.0
 homepage: https://github.com/zaikir/flutter_blurry_image_detector
 
 environment:
-  sdk: ^3.7.2
-  flutter: '>=3.3.0'
+  sdk: ^3.0.0
+  flutter: '>=3.0.0'
 
 dependencies:
   flutter:

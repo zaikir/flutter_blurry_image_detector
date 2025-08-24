@@ -13,7 +13,7 @@ class MethodChannelKirzBlurryImageDetector extends KirzBlurryImageDetectorPlatfo
   Future<List<String>> findBlurryImages({
     double? threshold,
     required int pageSize,
-    required Function(int page, double progress, List<String> blurryIds) onProgress,
+    Function(int page, double progress, List<String> blurryIds)? onProgress,
   }) async {
     // Set up event channel for progress updates
     const eventChannel = EventChannel('kirz_blurry_image_detector_progress');
@@ -30,7 +30,7 @@ class MethodChannelKirzBlurryImageDetector extends KirzBlurryImageDetectorPlatfo
         final percentage = (processed / total) * 100;
 
         blurryIds.addAll(ids);
-        onProgress(page, percentage.clamp(0, 100), blurryIds);
+        onProgress?.call(page, percentage.clamp(0, 100), blurryIds);
       }
     });
 

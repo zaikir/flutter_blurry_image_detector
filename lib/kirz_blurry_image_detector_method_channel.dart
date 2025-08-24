@@ -13,6 +13,7 @@ class MethodChannelKirzBlurryImageDetector extends KirzBlurryImageDetectorPlatfo
   Future<List<String>> findBlurryImages({
     double? threshold,
     required int pageSize,
+    required bool forceRefresh,
     Function(int page, double progress, List<String> blurryIds)? onProgress,
   }) async {
     // Set up event channel for progress updates
@@ -37,6 +38,7 @@ class MethodChannelKirzBlurryImageDetector extends KirzBlurryImageDetectorPlatfo
     await methodChannel.invokeMethod('findBlurryImages', {
       'threshold': threshold,
       'pageSize': pageSize,
+      'forceRefresh': forceRefresh,
     });
 
     return blurryIds;

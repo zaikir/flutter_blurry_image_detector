@@ -90,7 +90,9 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin, FlutterStre
               "processed": startIndex + pageAssets.count,
             ]
 
-            self.sink?(progressData)
+            DispatchQueue.main.async {
+              self.sink?(progressData)
+            }
 
             // Signal that this page is done
             pageSemaphore.signal()
@@ -100,8 +102,10 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin, FlutterStre
         // Save cache after processing
         self.saveCache()
 
-        self.sink?(FlutterEndOfEventStream)
-        result(nil)
+        DispatchQueue.main.async {
+          self.sink?(FlutterEndOfEventStream)
+          result(nil)
+        }
       }
     default:
       result(FlutterMethodNotImplemented)
@@ -110,7 +114,9 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin, FlutterStre
 
   public func onListen(withArguments _: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     sink = events
-    sink?(0)
+    DispatchQueue.main.async {
+      self.sink?(0)
+    }
     return nil
   }
 

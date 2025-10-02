@@ -67,15 +67,17 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
 
         // Process pages sequentially
         for page in 0 ..< totalPages {
-          let startIndex = page * pageSize
-          let endIndex = min(startIndex + pageSize, assets.count)
-          let pageAssets = Array(assets[startIndex ..< endIndex])
+          autoreleasepool {
+            let startIndex = page * pageSize
+            let endIndex = min(startIndex + pageSize, assets.count)
+            let pageAssets = Array(assets[startIndex ..< endIndex])
 
-          // Process this page synchronously
-          let pageBlurryIds = self.processPageSync(pageAssets, threshold: Float(threshold), forceRefresh: forceRefresh)
+            // Process this page synchronously
+            let pageBlurryIds = self.processPageSync(pageAssets, threshold: Float(threshold), forceRefresh: forceRefresh)
 
-          // Accumulate results from this page
-          allBlurryIds.append(contentsOf: pageBlurryIds)
+            // Accumulate results from this page
+            allBlurryIds.append(contentsOf: pageBlurryIds)
+          }
         }
 
         // Save cache after processing
@@ -121,11 +123,13 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
 
     for asset in assetsToProcess {
       dispatchGroup.enter()
-      assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
-        if let pixelBuffer = pixelBuffer {
-          assetBuffers[asset.localIdentifier] = pixelBuffer
+      autoreleasepool {
+        assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
+          if let pixelBuffer = pixelBuffer {
+            assetBuffers[asset.localIdentifier] = pixelBuffer
+          }
+          dispatchGroup.leave()
         }
-        dispatchGroup.leave()
       }
     }
 
@@ -162,6 +166,9 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
 
     // Wait for GPU processing to complete
     workGroup.wait()
+
+    // Clear pixel buffers to free memory
+    assetBuffers.removeAll()
 
     return blurryIds
   }
@@ -200,11 +207,13 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
 
     for asset in assetsToProcess {
       dispatchGroup.enter()
-      assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
-        if let pixelBuffer = pixelBuffer {
-          assetBuffers[asset.localIdentifier] = pixelBuffer
+      autoreleasepool {
+        assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
+          if let pixelBuffer = pixelBuffer {
+            assetBuffers[asset.localIdentifier] = pixelBuffer
+          }
+          dispatchGroup.leave()
         }
-        dispatchGroup.leave()
       }
     }
 

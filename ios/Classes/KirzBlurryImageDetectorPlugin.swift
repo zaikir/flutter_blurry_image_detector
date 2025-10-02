@@ -54,10 +54,12 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
       // Load cache if not already loaded
       self.loadCache()
 
-      DispatchQueue.global(qos: .userInitiated).async {
+      DispatchQueue.global(qos: .background).async {
         // Fetch all assets from the photo library
         let fetchOptions = PHFetchOptions()
+        fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+
         let fetch = PHAsset.fetchAssets(with: fetchOptions)
         var assets: [PHAsset] = []
         fetch.enumerateObjects { a, _, _ in assets.append(a) }
@@ -124,7 +126,7 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
     for asset in assetsToProcess {
       dispatchGroup.enter()
       autoreleasepool {
-        assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
+        assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 128, height: 128)) { pixelBuffer in
           if let pixelBuffer = pixelBuffer {
             assetBuffers[asset.localIdentifier] = pixelBuffer
           }
@@ -217,7 +219,7 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
       }
     }
 
-    dispatchGroup.notify(queue: .global(qos: .userInitiated)) {
+    dispatchGroup.notify(queue: .global(qos: .background)) {
       let detector = BlurDetectorGPU()!
       let inflight = DispatchSemaphore(value: 2)
       let workGroup = DispatchGroup()
@@ -248,7 +250,7 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
         }
       }
 
-      workGroup.notify(queue: .global(qos: .userInitiated)) {
+      workGroup.notify(queue: .global(qos: .background)) {
         completion(blurryIds)
       }
     }

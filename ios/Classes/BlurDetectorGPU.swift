@@ -105,5 +105,8 @@ final class BlurDetectorGPU {
             completion(stdSample)
         }
         cmd.commit()
+        // Yield GPU time for UI rendering (16.67ms ≈ 60 FPS)
+        cmd.waitUntilScheduled()
+//         Thread.sleep(forTimeInterval: 0.008) // 8ms yield per image
     }
 }

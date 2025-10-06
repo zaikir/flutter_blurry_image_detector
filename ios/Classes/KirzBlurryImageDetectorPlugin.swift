@@ -139,7 +139,7 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
     dispatchGroup.wait()
 
     let detector = BlurDetectorGPU()!
-    let inflight = DispatchSemaphore(value: 2)
+    let inflight = DispatchSemaphore(value: 1)
     let workGroup = DispatchGroup()
 
     for (id, pb) in assetBuffers {
@@ -173,86 +173,5 @@ public class KirzBlurryImageDetectorPlugin: NSObject, FlutterPlugin {
     assetBuffers.removeAll()
 
     return blurryIds
-  }
-
-  private func processPage(_ assets: [PHAsset], threshold: Float, forceRefresh: Bool, completion: @escaping ([String]) -> Void) {
-    var blurryIds: [String] = []
-    let blurryIdsLock = NSLock()
-    var assetBuffers: [String: CVPixelBuffer] = [:]
-    var assetsToProcess: [PHAsset] = []
-
-    // Check cache first if not forcing refresh
-    for asset in assets {
-      let cacheKey = getCacheKey(assetId: asset.localIdentifier, threshold: threshold)
-
-      if !forceRefresh, let cachedResult = Self.cache[cacheKey] {
-        // Use cached result
-        if let isBlurry = cachedResult["isBlurry"] as? Bool, isBlurry {
-          blurryIdsLock.lock()
-          blurryIds.append(asset.localIdentifier)
-          blurryIdsLock.unlock()
-        }
-      } else {
-        // Need to process this asset
-        assetsToProcess.append(asset)
-      }
-    }
-
-    // If no assets need processing, return cached results
-    if assetsToProcess.isEmpty {
-      completion(blurryIds)
-      return
-    }
-
-    let dispatchGroup = DispatchGroup()
-    let assetToPixelBuffer = AssetToPixelBuffer()
-
-    for asset in assetsToProcess {
-      dispatchGroup.enter()
-      autoreleasepool {
-        assetToPixelBuffer.pixelBuffer(from: asset, inputSize: CGSize(width: 224, height: 224)) { pixelBuffer in
-          if let pixelBuffer = pixelBuffer {
-            assetBuffers[asset.localIdentifier] = pixelBuffer
-          }
-          dispatchGroup.leave()
-        }
-      }
-    }
-
-    dispatchGroup.notify(queue: .global(qos: .background)) {
-      let detector = BlurDetectorGPU()!
-      let inflight = DispatchSemaphore(value: 2)
-      let workGroup = DispatchGroup()
-
-      for (id, pb) in assetBuffers {
-        inflight.wait()
-        workGroup.enter()
-        detector.encodeVarianceOfLaplacian(pb) { variance in
-          if let v = variance {
-            let isBlurry = v < threshold
-
-            // Cache the result
-            let cacheKey = self.getCacheKey(assetId: id, threshold: threshold)
-            Self.cache[cacheKey] = [
-              "isBlurry": isBlurry,
-              "variance": v,
-              "timestamp": Date().timeIntervalSince1970
-            ]
-
-            if isBlurry {
-              blurryIdsLock.lock()
-              blurryIds.append(id)
-              blurryIdsLock.unlock()
-            }
-          }
-          inflight.signal()
-          workGroup.leave()
-        }
-      }
-
-      workGroup.notify(queue: .global(qos: .background)) {
-        completion(blurryIds)
-      }
-    }
   }
 }
